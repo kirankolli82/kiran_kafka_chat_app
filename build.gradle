@@ -22,6 +22,9 @@ repositories {
 
 
 dependencies {
+    // https://mvnrepository.com/artifact/org.apache.kafka/kafka
+    compile group: 'org.apache.kafka', name: 'kafka_2.12', version: '2.2.0'
+
     // https://mvnrepository.com/artifact/org.apache.kafka/kafka-clients
     compile group: 'org.apache.kafka', name: 'kafka-clients', version: '2.1.1'
 
