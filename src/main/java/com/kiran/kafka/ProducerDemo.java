@@ -13,7 +13,7 @@ import java.util.Properties;
  * Created by Kiran Kolli on 27-03-2019.
  */
 public class ProducerDemo {
-    public static final String BOOTSTRAP_SERVERS = "localhost:9092";
+    static final String BOOTSTRAP_SERVERS = "localhost:9092";
     private static Logger log = LoggerFactory.getLogger(ProducerDemo.class);
 
     public static void main(String[] args) {

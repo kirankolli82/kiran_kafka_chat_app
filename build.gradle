@@ -31,6 +31,17 @@ dependencies {
     // https://mvnrepository.com/artifact/ch.qos.logback/logback-classic
     compile group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
 
+    // https://mvnrepository.com/artifact/org.springframework/spring-context
+    compile group: 'org.springframework', name: 'spring-context', version: '5.1.5.RELEASE'
+
+    // https://mvnrepository.com/artifact/org.controlsfx/controlsfx
+    //compile group: 'org.controlsfx', name: 'controlsfx', version: '8.40.14'
+
+    // https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
+    compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.8.1'
+
+    compile 'org.kordamp.bootstrapfx:bootstrapfx-core:0.2.4'
+
     // Use JUnit test framework
     testCompile 'junit:junit:4.12'
 }
