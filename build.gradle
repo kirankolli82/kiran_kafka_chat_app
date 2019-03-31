@@ -42,6 +42,10 @@ dependencies {
 
     compile 'org.kordamp.bootstrapfx:bootstrapfx-core:0.2.4'
 
+    // https://mvnrepository.com/artifact/org.apache.zookeeper/zookeeper
+    compile group: 'org.apache.zookeeper', name: 'zookeeper', version: '3.4.13', ext: 'pom'
+
+
     // Use JUnit test framework
     testCompile 'junit:junit:4.12'
 }
