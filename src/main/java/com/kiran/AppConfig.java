@@ -40,4 +40,9 @@ public class AppConfig {
             }
         };
     }
+
+    @Bean
+    public ContactsTopic contactsTopic() {
+        return subscriber -> subscriber.onContactAdded(new ContactsTopic.Contact("Dummy Contact"));
+    }
 }

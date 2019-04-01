@@ -1,6 +1,6 @@
 package com.kiran.gui;
 
-import com.kiran.TransportLane;
+import com.kiran.ContactsTopic;
 import com.kiran.TransportLaneFactory;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -14,10 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.util.Arrays;
-import java.util.Optional;
 
 /**
  * Created by Kiran Kolli on 29-03-2019.
@@ -29,9 +25,11 @@ public class LoginController {
     @FXML
     private TextField userName;
 
+    private final ContactsTopic contactsTopic;
     private final TransportLaneFactory transportLaneFactory;
 
-    public LoginController(TransportLaneFactory transportLaneFactory) {
+    LoginController(ContactsTopic contactsTopic, TransportLaneFactory transportLaneFactory) {
+        this.contactsTopic = contactsTopic;
         this.transportLaneFactory = transportLaneFactory;
     }
 
@@ -50,22 +48,8 @@ public class LoginController {
         if (!StringUtils.isBlank(userName.getText())) {
             String userId = userName.getText();
             try {
-                FXMLLoader fxmlLoader = new FXMLLoader(getClass().getClassLoader().getResource("chatClient.fxml"));
-                fxmlLoader.setControllerFactory(param -> {
-                    Optional<Constructor<?>> constructor = Arrays.stream(param.getConstructors())
-                            .filter(constructor1 -> (constructor1.getParameterCount() == 1) &&
-                                    (TransportLane.class.isAssignableFrom(constructor1.getParameterTypes()[0]))).findFirst();
-                    if (constructor.isPresent()) {
-                        try {
-                            return constructor.get().newInstance(transportLaneFactory.createLane(userId));
-                        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-                            log.error("Unable to create controller", e);
-                            throw new RuntimeException(e);
-                        }
-                    } else {
-                        return null;
-                    }
-                });
+                FXMLLoader fxmlLoader = new FXMLLoader(getClass().getClassLoader().getResource("contacts.fxml"));
+                fxmlLoader.setControllerFactory(param -> new ContactsController(contactsTopic, userId, transportLaneFactory));
                 Parent root = fxmlLoader.load();
                 Scene scene = new Scene(root, 500, 800);
                 scene.getStylesheets().add("org/kordamp/bootstrapfx/bootstrapfx.css");
