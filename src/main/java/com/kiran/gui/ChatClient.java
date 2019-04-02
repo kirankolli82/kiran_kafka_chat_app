@@ -10,7 +10,6 @@ import javafx.scene.Scene;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 /**
@@ -22,12 +21,13 @@ public class ChatClient extends Application {
 
     private ContactsTopic topic;
     private TransportLaneFactory transportLaneFactory;
+    private AnnotationConfigApplicationContext applicationContext;
 
 
     @Override
     public void start(Stage primaryStage) throws Exception {
         ChatClient.primaryStage = primaryStage;
-        ApplicationContext applicationContext = new AnnotationConfigApplicationContext(AppConfig.class);
+        this.applicationContext = new AnnotationConfigApplicationContext(AppConfig.class);
         this.transportLaneFactory = applicationContext.getBean("transportLaneFactory", TransportLaneFactory.class);
         this.topic = applicationContext.getBean("contactsTopic", ContactsTopic.class);
         FXMLLoader fxmlLoader = new FXMLLoader(getClass().getClassLoader().getResource("login.fxml"));
@@ -37,6 +37,13 @@ public class ChatClient extends Application {
         scene.getStylesheets().add("org/kordamp/bootstrapfx/bootstrapfx.css");
         primaryStage.setScene(scene);
         primaryStage.show();
+    }
+
+    @Override
+    public void stop() throws Exception {
+        log.info("About to close application");
+        this.applicationContext.close();
+        log.info("Resources cleaned up");
     }
 
     public static void main(String[] args) {

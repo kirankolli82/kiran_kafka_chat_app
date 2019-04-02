@@ -30,6 +30,13 @@ public interface ContactsTopic {
         public int hashCode() {
             return Objects.hash(userId);
         }
+
+        @Override
+        public String toString() {
+            return "Contact{" +
+                    "userId='" + userId + '\'' +
+                    '}';
+        }
     }
 
     void subscribe(Subscriber subscriber);

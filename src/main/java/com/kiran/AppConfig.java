@@ -1,5 +1,6 @@
 package com.kiran;
 
+import com.kiran.zookeeper.ZookeeperContactsTopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -41,8 +42,8 @@ public class AppConfig {
         };
     }
 
-    @Bean
+    @Bean(destroyMethod = "cleanUp")
     public ContactsTopic contactsTopic() {
-        return subscriber -> subscriber.onContactAdded(new ContactsTopic.Contact("Dummy Contact"));
+        return new ZookeeperContactsTopic("/chatUsers", "localhost:2181");
     }
 }
