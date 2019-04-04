@@ -1,6 +1,9 @@
 package com.kiran.gui;
 
-import com.kiran.TransportLane;
+
+import com.kiran.ContactsTopic;
+import com.kiran.TransportLaneFactory;
+import com.kiran.util.DaemonThreadFactory;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
@@ -16,7 +19,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.*;
 
 
 /**
@@ -33,9 +36,12 @@ public class ChatClientController {
     @FXML
     private VBox messageBox;
 
-    private final TransportLane transportLane;
+    private final ContactsTopic.Contact other;
+    private final TransportLaneFactory.TransportLane transportLane;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor(new DaemonThreadFactory());
 
-    public ChatClientController(TransportLane transportLane) {
+    public ChatClientController(ContactsTopic.Contact other, TransportLaneFactory.TransportLane transportLane) {
+        this.other = other;
         this.transportLane = transportLane;
     }
 
@@ -52,25 +58,59 @@ public class ChatClientController {
         sendButton.setOnMouseClicked(event -> processText());
     }
 
+    public void onMessageReceived(String message) {
+        Platform.runLater(() -> {
+            HBox hBox = new HBox();
+            hBox.setAlignment(Pos.CENTER_LEFT);
+            Label messageLabel = new Label(message);
+            messageLabel.getStyleClass().setAll("lbl", "lbl-info");
+            messageLabel.setTextAlignment(TextAlignment.LEFT);
+            HBox.setHgrow(messageLabel, Priority.ALWAYS);
+            hBox.getChildren().add(messageLabel);
+            messageBox.getChildren().add(hBox);
+        });
+    }
+
     private void processText() {
         String message = textArea.getText();
         if (!StringUtils.isBlank(message)) {
-            CompletableFuture<Void> result = transportLane.sendOnLane(message);
-            result.whenComplete((aVoid, throwable) -> {
-                if (throwable == null) {
-                    Platform.runLater(() -> {
-                        HBox hBox = new HBox();
-                        hBox.setAlignment(Pos.CENTER_RIGHT);
-                        Label messageLabel = new Label(message);
-                        messageLabel.getStyleClass().setAll("lbl", "lbl-primary");
-                        messageLabel.setTextAlignment(TextAlignment.RIGHT);
-                        HBox.setHgrow(messageLabel, Priority.ALWAYS);
-                        hBox.getChildren().add(messageLabel);
-                        messageBox.getChildren().add(hBox);
-                        textArea.clear();
-                    });
+            executorService.submit(() -> {
+                CompletableFuture<Void> result = transportLane.sendOnLane(other, message);
+                try {
+                    result.get(5, TimeUnit.SECONDS);
+                    processSuccessfulSend(message);
+                } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                    processSendFailed(message, e);
                 }
             });
         }
+    }
+
+
+    private void processSendFailed(String message, Throwable throwable) {
+        Platform.runLater(() -> {
+            HBox hBox = new HBox();
+            hBox.setAlignment(Pos.CENTER_RIGHT);
+            Label messageLabel = new Label("WARNING: Could not send message: \n" + message + ";\n due to :" + throwable.getMessage());
+            messageLabel.getStyleClass().setAll("lbl", "lbl-danger");
+            messageLabel.setTextAlignment(TextAlignment.RIGHT);
+            HBox.setHgrow(messageLabel, Priority.ALWAYS);
+            hBox.getChildren().add(messageLabel);
+            messageBox.getChildren().add(hBox);
+        });
+    }
+
+    private void processSuccessfulSend(String message) {
+        Platform.runLater(() -> {
+            HBox hBox = new HBox();
+            hBox.setAlignment(Pos.CENTER_RIGHT);
+            Label messageLabel = new Label(message);
+            messageLabel.getStyleClass().setAll("lbl", "lbl-primary");
+            messageLabel.setTextAlignment(TextAlignment.RIGHT);
+            HBox.setHgrow(messageLabel, Priority.ALWAYS);
+            hBox.getChildren().add(messageLabel);
+            messageBox.getChildren().add(hBox);
+            textArea.clear();
+        });
     }
 }

@@ -58,7 +58,7 @@ public class ZookeeperContactsTopic implements ContactsTopic, Watcher {
             log.info("Node created");
         } catch (KeeperException | InterruptedException e) {
             log.error("Unable to publish arrival of subscriber {}", subscriber.getId().getUserId(), e);
-            throw new RuntimeException(e);
+            //throw new RuntimeException(e);
         }
         synchronized (lock) {
             subscribers.putIfAbsent(subscriber.getId().getUserId(), subscriber);

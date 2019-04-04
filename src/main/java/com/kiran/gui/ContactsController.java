@@ -1,7 +1,6 @@
 package com.kiran.gui;
 
 import com.kiran.ContactsTopic;
-import com.kiran.TransportLane;
 import com.kiran.TransportLaneFactory;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -17,12 +16,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -35,19 +32,20 @@ public class ContactsController {
     @FXML
     private VBox contactsBox;
 
-    private final ContactsTopic topic;
+    private final ContactsTopic contactsTopic;
     private final ContactsTopic.Contact currentUser;
-    private final TransportLaneFactory transportLaneFactory;
+    private final TransportLaneFactory.TransportLane transportLane;
+    private final Map<String, ChatClientController> controllersByUserId = new HashMap<>();
 
     ContactsController(ContactsTopic topic, String userId, TransportLaneFactory transportLaneFactory) {
-        this.topic = topic;
+        this.contactsTopic = topic;
         this.currentUser = new ContactsTopic.Contact(userId);
-        this.transportLaneFactory = transportLaneFactory;
+        this.transportLane = transportLaneFactory.createLaneForUser(userId);
     }
 
     @FXML
     public void initialize() {
-        this.topic.subscribe(new ContactsTopic.Subscriber() {
+        this.contactsTopic.subscribe(new ContactsTopic.Subscriber() {
             @Override
             public ContactsTopic.Contact getId() {
                 return currentUser;
@@ -83,39 +81,41 @@ public class ContactsController {
                 });
             }
         });
+
+        this.transportLane.subscribeToMessages((from, message) -> Platform.runLater(() -> {
+            log.info("Got message: {}; from: {}", message, from);
+            ChatClientController chatClientController = controllersByUserId.get(from.getUserId());
+            if (chatClientController == null) {
+                ChatClientController clientController = controllersByUserId.computeIfAbsent(from.getUserId(), key -> new ChatClientController(from, transportLane));
+                openChatWindow(from);
+                clientController.onMessageReceived(message);
+            } else {
+                chatClientController.onMessageReceived(message);
+            }
+        }));
     }
 
     private void openChatWith(ContactsTopic.Contact contact) {
         if (contact != null) {
-            String userId = contact.getUserId();
-            try {
-                FXMLLoader fxmlLoader = new FXMLLoader(getClass().getClassLoader().getResource("chatClient.fxml"));
-                fxmlLoader.setControllerFactory(param -> {
-                    Optional<Constructor<?>> constructor = Arrays.stream(param.getConstructors())
-                            .filter(constructor1 -> (constructor1.getParameterCount() == 1) &&
-                                    (TransportLane.class.isAssignableFrom(constructor1.getParameterTypes()[0]))).findFirst();
-                    if (constructor.isPresent()) {
-                        try {
-                            return constructor.get().newInstance(transportLaneFactory.createLane(userId));
-                        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-                            log.error("Unable to create controller", e);
-                            throw new RuntimeException(e);
-                        }
-                    } else {
-                        return null;
-                    }
-                });
-                Parent root = fxmlLoader.load();
-                Scene scene = new Scene(root, 500, 800);
-                scene.getStylesheets().add("org/kordamp/bootstrapfx/bootstrapfx.css");
-                Stage newStage = new Stage();
-                newStage.setTitle(userId);
-                newStage.setScene(scene);
-                newStage.show();
-            } catch (IOException e) {
-                log.error("Error while opening chat client ", e);
-                throw new RuntimeException(e);
-            }
+            openChatWindow(contact);
+        }
+    }
+
+    private void openChatWindow(ContactsTopic.Contact contact) {
+        try {
+            log.info("Opening chat window with {}", contact);
+            FXMLLoader fxmlLoader = new FXMLLoader(getClass().getClassLoader().getResource("chatClient.fxml"));
+            fxmlLoader.setControllerFactory(param -> controllersByUserId.computeIfAbsent(contact.getUserId(), key -> new ChatClientController(contact, transportLane)));
+            Parent root = fxmlLoader.load();
+            Scene scene = new Scene(root, 500, 800);
+            scene.getStylesheets().add("org/kordamp/bootstrapfx/bootstrapfx.css");
+            Stage newStage = new Stage();
+            newStage.setTitle(contact.getUserId());
+            newStage.setScene(scene);
+            newStage.show();
+        } catch (IOException e) {
+            log.error("Error while opening chat client ", e);
+            throw new RuntimeException(e);
         }
     }
 }
