@@ -63,6 +63,7 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
 
 
     public void close() {
+        log.info("Closing the KafkaTransportLanes");
         this.transportLanesByUserId.values().forEach(KafkaTransportLane::close);
         this.consumerService.shutdown();
         this.producerService.shutdown();
@@ -147,8 +148,13 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
                     records.forEach(record -> {
                         log.info("User id: {} has received message: {}; from: {}", userId, record.value(), record.key());
                         List<String> path = Arrays.asList(record.key().split(DELIM));
-                        if (path.remove(userId) && subscriberRef.get() != null) {
-                            subscriberRef.get().processMessage(new ContactsTopic.Contact(path.get(0)), record.value());
+                        if (path.size() != 2) {
+                            log.error("Invalid Path: {}, will not process message", path);
+                            return;
+                        }
+                        if (path.contains(userId) && subscriberRef.get() != null) {
+                            String otherUser = getOtherUser(path);
+                            subscriberRef.get().processMessage(new ContactsTopic.Contact(otherUser), record.value());
                         }
                     });
                     Thread.sleep(TimeUnit.SECONDS.toMillis(1));
@@ -158,9 +164,15 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
             } catch (InterruptedException e) {
                 log.error("Consumer for {} interrupted during sleep", userId, e);
                 throw new RuntimeException(e);
+            } catch (Exception e) {
+                log.error("Consumer for {} has error", userId, e);
             } finally {
                 this.consumer.close();
             }
+        }
+
+        String getOtherUser(List<String> path) {
+            return path.stream().filter(user -> !Objects.equals(userId, user)).findFirst().orElse("");
         }
 
         void shutdown() {
