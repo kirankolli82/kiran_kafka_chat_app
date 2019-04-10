@@ -82,17 +82,22 @@ public class ContactsController {
             }
         });
 
-        this.transportLane.subscribeToMessages((from, message) -> Platform.runLater(() -> {
-            log.info("Got message: {}; from: {}", message, from);
-            ChatClientController chatClientController = controllersByUserId.get(from.getUserId());
-            if (chatClientController == null) {
-                ChatClientController clientController = controllersByUserId.computeIfAbsent(from.getUserId(), key -> new ChatClientController(from, transportLane));
-                openChatWindow(from);
-                clientController.onMessageReceived(message);
-            } else {
-                chatClientController.onMessageReceived(message);
+        this.transportLane.subscribeToMessages((from, message) -> {
+            if (Objects.equals(currentUser, from)) {
+                return;
             }
-        }));
+            Platform.runLater(() -> {
+                log.info("Got message: {}; from: {}", message, from);
+                ChatClientController chatClientController = controllersByUserId.get(from.getUserId());
+                if (chatClientController == null) {
+                    ChatClientController clientController = controllersByUserId.computeIfAbsent(from.getUserId(), key -> new ChatClientController(from, transportLane));
+                    openChatWindow(from);
+                    clientController.onMessageReceived(message);
+                } else {
+                    chatClientController.onMessageReceived(message);
+                }
+            });
+        });
     }
 
     private void openChatWith(ContactsTopic.Contact contact) {

@@ -44,7 +44,9 @@ public class ZookeeperContactsTopic implements ContactsTopic, Watcher {
         try {
             List<String> users = zooKeeper.getChildren(this.nodeName, this);
             updatesExecutor.execute(() -> informChanges(users));
-        } catch (KeeperException | InterruptedException e) {
+        } catch (KeeperException e) {
+            log.error("Error while watching /chatUsers", e);
+        } catch (InterruptedException e) {
             log.error("Error while watching /chatUsers", e);
             throw new RuntimeException(e);
         }

@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration;
 @ComponentScan(basePackages = "com.kiran.kafka.transport")
 public class AppConfig {
 
-    @Bean(destroyMethod = "close")
+    @Bean
     public TransportLaneFactory transportLaneFactory() {
         return new KafkaTransportLaneFactory("chatTopic", "localhost:9092");
     }

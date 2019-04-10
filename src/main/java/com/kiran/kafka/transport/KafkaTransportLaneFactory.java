@@ -1,8 +1,9 @@
 package com.kiran.kafka.transport;
 
-import com.kiran.ContactsTopic;
+import com.kiran.ContactsTopic.Contact;
 import com.kiran.TransportLaneFactory;
 import com.kiran.util.DaemonThreadFactory;
+import com.kiran.util.Tuple;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -10,11 +11,10 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -30,13 +30,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class KafkaTransportLaneFactory implements TransportLaneFactory {
 
-    private static final String DELIM = ":";
     private static final Logger log = LoggerFactory.getLogger(KafkaTransportLaneFactory.class);
 
     private final String topic;
     private final String bootstrapServer;
 
-    private final KafkaProducer<String, String> producer;
+    private final KafkaProducer<Tuple<Contact, Contact>, Message> producer;
 
     private final Map<String, KafkaTransportLane> transportLanesByUserId = new HashMap<>();
     private final ExecutorService consumerService = Executors.newCachedThreadPool(new DaemonThreadFactory());
@@ -45,7 +44,7 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
     @Override
     public TransportLane createLaneForUser(String userId) {
         log.info("Creating Kafka Transport Lane for {}", userId);
-        ContactsTopic.Contact currentUser = new ContactsTopic.Contact(userId);
+        Contact currentUser = new Contact(userId);
         ConsumerRunnable consumerRunnable = new ConsumerRunnable(userId, bootstrapServer);
         return transportLanesByUserId.computeIfAbsent(userId, key -> new KafkaTransportLane(currentUser, consumerRunnable));
     }
@@ -55,13 +54,15 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
         this.bootstrapServer = bootstrapServer;
         Properties properties = new Properties();
         properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, MessageKeySerializationUtil.class.getName());
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, MessageSerializationUtil.class.getName());
         properties.put(ProducerConfig.ACKS_CONFIG, "1");
         this.producer = new KafkaProducer<>(properties);
     }
 
 
+    @SuppressWarnings("unused")
+    @PreDestroy
     public void close() {
         log.info("Closing the KafkaTransportLanes");
         this.transportLanesByUserId.values().forEach(KafkaTransportLane::close);
@@ -76,16 +77,17 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
     }
 
     class KafkaTransportLane implements TransportLane {
-        private final ContactsTopic.Contact currentUser;
+        private final Contact currentUser;
         private final ConsumerRunnable consumerRunnable;
 
-        KafkaTransportLane(ContactsTopic.Contact currentUser, ConsumerRunnable consumerRunnable) {
+        KafkaTransportLane(Contact currentUser, ConsumerRunnable consumerRunnable) {
+            log.info("Creating kafka transport lane for : {}", currentUser);
             this.currentUser = currentUser;
             this.consumerRunnable = consumerRunnable;
         }
 
         @Override
-        public ContactsTopic.Contact getId() {
+        public Contact getId() {
             return currentUser;
         }
 
@@ -97,10 +99,10 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
         }
 
         @Override
-        public CompletableFuture<Void> sendOnLane(ContactsTopic.Contact to, String message) {
+        public CompletableFuture<Void> sendOnLane(Contact to, String message) {
             CompletableFuture<Void> future = new CompletableFuture<>();
             producerService.submit(() -> {
-                ProducerRecord<String, String> producerRecord = new ProducerRecord<>(topic, getKey(currentUser, to), message);
+                ProducerRecord<Tuple<Contact, Contact>, Message> producerRecord = new ProducerRecord<>(topic, new Tuple<>(to, currentUser), new Message(currentUser, message));
                 producer.send(producerRecord, (metadata, exception) -> {
                     if (exception != null) {
                         future.completeExceptionally(exception);
@@ -123,15 +125,15 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
 
 
         private final String userId;
-        private final KafkaConsumer<String, String> consumer;
+        private final KafkaConsumer<Tuple<Contact, Contact>, Message> consumer;
         private final AtomicReference<Subscriber> subscriberRef = new AtomicReference<>();
 
         ConsumerRunnable(String userId, String bootstrapServer) {
             this.userId = userId;
             Properties properties = new Properties();
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-            properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-            properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+            properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, MessageKeySerializationUtil.class.getName());
+            properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, MessageSerializationUtil.class.getName());
             properties.put(ConsumerConfig.GROUP_ID_CONFIG, userId);
             properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             this.consumer = new KafkaConsumer<>(properties);
@@ -143,18 +145,14 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
                 this.consumer.subscribe(Collections.singleton(topic));
                 //noinspection InfiniteLoopStatement --> will exit when shutdown is invoked which will throw a WakeupException
                 while (true) {
-                    ConsumerRecords<String, String> records =
+                    ConsumerRecords<Tuple<Contact, Contact>, Message> records =
                             this.consumer.poll(Duration.of(1, ChronoUnit.SECONDS));
                     records.forEach(record -> {
                         log.info("User id: {} has received message: {}; from: {}", userId, record.value(), record.key());
-                        List<String> path = Arrays.asList(record.key().split(DELIM));
-                        if (path.size() != 2) {
-                            log.error("Invalid Path: {}, will not process message", path);
-                            return;
-                        }
-                        if (path.contains(userId) && subscriberRef.get() != null) {
-                            String otherUser = getOtherUser(path);
-                            subscriberRef.get().processMessage(new ContactsTopic.Contact(otherUser), record.value());
+                        boolean isOfCurrentUser = (Objects.equals(userId, record.key().getKey().getUserId()))
+                                || (Objects.equals(userId, record.key().getValue().getUserId()));
+                        if (isOfCurrentUser && subscriberRef.get() != null) {
+                            subscriberRef.get().processMessage(record.value().getFrom(), record.value().getMessage());
                         }
                     });
                     Thread.sleep(TimeUnit.SECONDS.toMillis(1));
@@ -171,20 +169,9 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
             }
         }
 
-        String getOtherUser(List<String> path) {
-            return path.stream().filter(user -> !Objects.equals(userId, user)).findFirst().orElse("");
-        }
-
         void shutdown() {
             this.consumer.wakeup();
         }
     }
 
-    private String getKey(ContactsTopic.Contact contact1, ContactsTopic.Contact contact2) {
-        if (contact1.getUserId().compareTo(contact2.getUserId()) < 0) {
-            return contact1.getUserId() + DELIM + contact2.getUserId();
-        } else {
-            return contact2.getUserId() + DELIM + contact1.getUserId();
-        }
-    }
 }
