@@ -117,6 +117,7 @@ public class ContactsController {
             Stage newStage = new Stage();
             newStage.setTitle(contact.getUserId());
             newStage.setScene(scene);
+            newStage.setOnCloseRequest(event -> controllersByUserId.get(contact.getUserId()).onClose());
             newStage.show();
         } catch (IOException e) {
             log.error("Error while opening chat client ", e);

@@ -38,8 +38,8 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
     private final KafkaProducer<Tuple<Contact, Contact>, Message> producer;
 
     private final Map<String, KafkaTransportLane> transportLanesByUserId = new HashMap<>();
-    private final ExecutorService consumerService = Executors.newCachedThreadPool(new DaemonThreadFactory());
-    private final ExecutorService producerService = Executors.newSingleThreadExecutor(new DaemonThreadFactory());
+    private final ExecutorService consumerService = Executors.newCachedThreadPool(new DaemonThreadFactory("KafkaConsumer"));
+    private final ExecutorService producerService = Executors.newSingleThreadExecutor(new DaemonThreadFactory("KafkaProducer"));
 
     @Override
     public TransportLane createLaneForUser(String userId) {
@@ -117,6 +117,7 @@ public class KafkaTransportLaneFactory implements TransportLaneFactory {
         }
 
         void close() {
+            producer.close();
             consumerRunnable.shutdown();
         }
     }

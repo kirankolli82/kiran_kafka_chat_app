@@ -1,13 +1,15 @@
 package com.kiran.zookeeper;
 
 import com.kiran.ContactsTopic;
+import com.kiran.util.DaemonThreadFactory;
 import org.apache.zookeeper.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -26,7 +28,7 @@ public class ZookeeperContactsTopic implements ContactsTopic, Watcher {
     private final Object lock = new Object();
     private final Set<Contact> contacts = new HashSet<>();
     private final Map<String, Subscriber> subscribers = new HashMap<>();
-    private final Executor updatesExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService updatesExecutor = Executors.newSingleThreadExecutor(new DaemonThreadFactory("Zookeeper Thread"));
 
     public ZookeeperContactsTopic(String nodeName, String hostPort) {
         this.nodeName = nodeName;
@@ -67,9 +69,13 @@ public class ZookeeperContactsTopic implements ContactsTopic, Watcher {
         }
     }
 
+    @PreDestroy
     public void cleanUp() {
+        log.info("Closing zookeeper connection");
         try {
             zooKeeper.close();
+            updatesExecutor.shutdown();
+            updatesExecutor.awaitTermination(1, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             log.error("Unable to close zookeeper cleanly", e);
         }

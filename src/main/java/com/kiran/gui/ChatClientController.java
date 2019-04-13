@@ -38,7 +38,7 @@ public class ChatClientController {
 
     private final ContactsTopic.Contact other;
     private final TransportLaneFactory.TransportLane transportLane;
-    private final ExecutorService executorService = Executors.newSingleThreadExecutor(new DaemonThreadFactory());
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor(new DaemonThreadFactory("ChatClientThread"));
 
     public ChatClientController(ContactsTopic.Contact other, TransportLaneFactory.TransportLane transportLane) {
         this.other = other;
@@ -56,9 +56,20 @@ public class ChatClientController {
         });
 
         sendButton.setOnMouseClicked(event -> processText());
+
     }
 
-    public void onMessageReceived(String message) {
+    void onClose() {
+        log.info("Closing the Chat Window");
+        executorService.shutdown();
+        try {
+            executorService.awaitTermination(1, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            log.error("Error while cleanly shutting down chat window with {}", other, e);
+        }
+    }
+
+    void onMessageReceived(String message) {
         Platform.runLater(() -> {
             HBox hBox = new HBox();
             hBox.setAlignment(Pos.CENTER_LEFT);
@@ -76,6 +87,7 @@ public class ChatClientController {
         if (!StringUtils.isBlank(message)) {
             executorService.submit(() -> {
                 CompletableFuture<Void> result = transportLane.sendOnLane(other, message);
+
                 try {
                     result.get(5, TimeUnit.SECONDS);
                     processSuccessfulSend(message);

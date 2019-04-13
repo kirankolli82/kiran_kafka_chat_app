@@ -18,7 +18,7 @@ public class AppConfig {
         return new KafkaTransportLaneFactory("chatTopic", "localhost:9092");
     }
 
-    @Bean(destroyMethod = "cleanUp")
+    @Bean
     public ContactsTopic contactsTopic() {
         return new ZookeeperContactsTopic("/chatUsers", "localhost:2181");
     }

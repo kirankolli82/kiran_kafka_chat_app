@@ -7,9 +7,16 @@ import java.util.concurrent.ThreadFactory;
  */
 public class DaemonThreadFactory implements ThreadFactory {
 
+    private String name;
+
+    public DaemonThreadFactory(String name) {
+        this.name = name;
+    }
+
     @Override
     public Thread newThread(Runnable r) {
         Thread thread = new Thread(r);
+        thread.setName(this.name);
         thread.setDaemon(true);
         return thread;
     }
